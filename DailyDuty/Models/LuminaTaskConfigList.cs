@@ -4,9 +4,9 @@ using System.Drawing;
 using System.Linq;
 using Dalamud.Interface;
 using Dalamud.Interface.Components;
-using ImGuiNET;
 using Lumina.Excel;
 using DailyDuty.Localization;
+using Dalamud.Bindings.ImGui;
 using Dalamud.Interface.Utility.Raii;
 using Lumina.Excel.Sheets;
 
@@ -71,8 +71,8 @@ public class LuminaTaskConfigList<T> : ICollection<LuminaTaskConfig<T>> where T 
 	private bool DrawContentsNoteConfig() {
 		var result = false;
 		
-		foreach (var category in Service.DataManager.GetExcelSheet<ContentsNoteCategory>().Where(category => category.Unknown0.ExtractText() != string.Empty)) {
-			if (ImGui.CollapsingHeader(category.Unknown0.ExtractText())) {
+		foreach (var category in Service.DataManager.GetExcelSheet<ContentsNoteCategory>().Where(category => category.Unknown0.ToString() != string.Empty)) {
+			if (ImGui.CollapsingHeader(category.Unknown0.ToString())) {
 				using var indent = ImRaii.PushIndent();
 				
 				foreach (var option in ConfigList) {
@@ -117,7 +117,7 @@ public class LuminaTaskConfigList<T> : ICollection<LuminaTaskConfig<T>> where T 
                         
 				ImGui.TableNextColumn();
 				var count = data.TargetCount;
-				ImGui.InputInt($"##TrackedItemCount{luminaData.Name}", ref count, 0, 0);
+				ImGui.InputInt($"##TrackedItemCount{luminaData.Name}", ref count);
 				if (ImGui.IsItemDeactivatedAfterEdit()) {
 					data.TargetCount = count;
 					result = true;

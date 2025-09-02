@@ -5,10 +5,10 @@ using DailyDuty.Classes;
 using DailyDuty.CustomNodes;
 using DailyDuty.Localization;
 using DailyDuty.Models;
+using Dalamud.Bindings.ImGui;
 using Dalamud.Game.Text;
 using Dalamud.Interface.Utility;
 using Dalamud.Interface.Utility.Raii;
-using ImGuiNET;
 using KamiLib.Classes;
 using KamiLib.Configuration;
 using KamiLib.Extensions;
@@ -225,10 +225,10 @@ public abstract class Module<T, TU> : Module where T : ModuleData, new() where T
     }
 
     private T LoadData()
-        => Service.PluginInterface.LoadCharacterFile(Service.ClientState.LocalContentId, $"{ModuleName}.data.json", () => new T());
+        => Service.PluginInterface.LoadCharacterFile<T>(Service.ClientState.LocalContentId, $"{ModuleName}.data.json");
     
     private TU LoadConfig()
-        => Service.PluginInterface.LoadCharacterFile(Service.ClientState.LocalContentId, $"{ModuleName}.config.json", () => new TU());
+        => Service.PluginInterface.LoadCharacterFile<TU>(Service.ClientState.LocalContentId, $"{ModuleName}.config.json");
     
     public override void SaveConfig() 
         => Service.PluginInterface.SaveCharacterFile(Service.ClientState.LocalContentId, $"{ModuleName}.config.json", Config);

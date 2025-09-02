@@ -6,13 +6,13 @@ using DailyDuty.Classes;
 using DailyDuty.Models;
 using DailyDuty.Localization;
 using DailyDuty.Modules.BaseModules;
+using Dalamud.Bindings.ImGui;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using Dalamud.Interface;
 using Dalamud.Interface.Utility;
 using Dalamud.Interface.Utility.Raii;
 using FFXIVClientStructs.FFXIV.Client.UI;
-using ImGuiNET;
 using KamiLib.Classes;
 using KamiLib.Window.SelectionWindows;
 using Lumina.Excel.Sheets;
@@ -115,7 +115,7 @@ public class ChallengeLogConfig : ModuleTaskConfig<ContentsNote> {
             
             ImGui.SameLine();
             
-            ImGui.Text(task.Name.ExtractText());
+            ImGui.Text(task.Name.ToString());
         }
 
         if (enabledWarnings.Count == 0) {
@@ -179,7 +179,7 @@ public unsafe class ChallengeLog : BaseModules.Modules.WeeklyTask<ModuleTaskData
             if (!matchingTaskData.Complete) {
                 var taskInfo = Service.DataManager.GetExcelSheet<ContentsNote>().GetRow(warningId);
                 
-                StatusMessage.PrintTaggedMessage($"{taskInfo.Name.ExtractText()} is still incomplete!", "ChallengeLog");
+                StatusMessage.PrintTaggedMessage($"{taskInfo.Name.ToString()} is still incomplete!", "ChallengeLog");
                 anyWarningGenerated = true;
             }
         }

@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
 using System.Numerics;
@@ -8,20 +7,18 @@ using DailyDuty.Localization;
 using DailyDuty.Models;
 using DailyDuty.Modules.BaseModules;
 using DailyDuty.Windows;
+using Dalamud.Bindings.ImGui;
 using Dalamud.Game.Addon.Events;
-using Dalamud.Game.Addon.Lifecycle;
-using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using Dalamud.Game.Text.SeStringHandling;
-using Dalamud.Hooking;
 using Dalamud.Interface;
 using Dalamud.Interface.Utility;
 using Dalamud.Utility;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.UI;
+using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Component.GUI;
-using ImGuiNET;
 using KamiLib.Classes;
-using KamiLib.Extensions;
+using KamiToolKit;
 using KamiToolKit.Classes;
 using KamiToolKit.Extensions;
 using KamiToolKit.Nodes;
@@ -100,95 +97,61 @@ public unsafe class DutyRoulette : BaseModules.Modules.DailyTask<DutyRouletteDat
     private TextButtonNode? openDailyDutyButton;
     private TextNode? dailyResetTimer;
 
-    private Hook<AtkComponentListItemPopulator.PopulateDelegate>? onDutyListPopulate;
-    private readonly List<uint> modifiedIndexes = [];
-    
+    private readonly NativeListController rouletteListController;
+
     public DutyRoulette() {
-        Service.AddonLifecycle.RegisterListener(AddonEvent.PostSetup, "ContentsFinder", OnContentsFinderSetup); 
-        Service.AddonLifecycle.RegisterListener(AddonEvent.PreFinalize, "ContentsFinder", OnContentsFinderFinalize);
+        rouletteListController = new NativeListController("ContentsFinder") {
+            ShouldModifyElement = ShouldModifyElement,
+            UpdateElement = UpdateElement,
+            ResetElement = ResetElement,
+            GetPopulatorNode = GetPopulatorNode,
+        };
         
         System.ContentsFinderController.OnAttach += AttachNodes;
         System.ContentsFinderController.OnDetach += DetachNodes;
         System.ContentsFinderController.OnUpdate += OnContentFinderUpdate;
     }
-
+    
     public override void Dispose() {
-        Service.AddonLifecycle.UnregisterListener(OnContentsFinderSetup, OnContentsFinderFinalize);
-        
-        System.ContentsFinderController.OnAttach -= AttachNodes;
-        System.ContentsFinderController.OnDetach -= DetachNodes;
-        System.ContentsFinderController.OnUpdate -= OnContentFinderUpdate;
-        
-        onDutyListPopulate?.Dispose();
-        
-        base.Dispose();
-    }
-    
-    private void OnContentsFinderSetup(AddonEvent type, AddonArgs args) {
-        var addon = args.GetAddon<AddonContentsFinder>();
-        var populateMethod = addon->DutyList->GetItemRendererByNodeId(6)->Populator.Populate;
-
-        onDutyListPopulate = Service.Hooker.HookFromAddress<AtkComponentListItemPopulator.PopulateDelegate>(populateMethod, OnPopulateHook);
-        onDutyListPopulate?.Enable();
-    }
-    
-    private void OnContentsFinderFinalize(AddonEvent type, AddonArgs args) {
-        onDutyListPopulate?.Dispose();
-        modifiedIndexes.Clear();
+        rouletteListController.Dispose();
     }
 
-    private void OnPopulateHook(AtkUnitBase* unitBase, AtkComponentListItemPopulator.ListItemInfo* listItemInfo, AtkResNode** nodeList) => HookSafety.ExecuteSafe(() => {
-        var index = listItemInfo->ListItem->Renderer->OwnerNode->NodeId;
-        
-        var dutyName = listItemInfo->ListItem->StringValues[0].ToString();
-        var dutyInfo = Service.DataManager.GetExcelSheet<ContentRoulette>().FirstOrNull(roulette => string.Equals(dutyName, roulette.Category.ExtractText(), StringComparison.OrdinalIgnoreCase));
+    private AtkComponentListItemRenderer* GetPopulatorNode(AtkUnitBase* addon) {
+        var contentsFinder = (AddonContentsFinder*) addon;
+        return contentsFinder->DutyList->GetItemRendererByNodeId(6);
+    }
 
+    private bool ShouldModifyElement(AtkUnitBase* unitBase, AtkComponentListItemPopulator.ListItemInfo* listItemInfo, AtkResNode** nodeList) {
+        var contentData = GetContentData(listItemInfo);
+
+        if (!Config.ColorContentFinder) return false;
+        if (contentData.ContentType is not ContentsId.ContentsType.Roulette) return false;
+        
+        var contentRoulette = Service.DataManager.GetExcelSheet<ContentRoulette>().GetRow(contentData.Id);
+        return Config.TaskConfig.FirstOrDefault(task => task.RowId == contentRoulette.RowId) is { Enabled: true };
+    }
+
+    private void UpdateElement(AtkUnitBase* unitBase, AtkComponentListItemPopulator.ListItemInfo* listItemInfo, AtkResNode** nodeList) {
+        var dutyNameTextNode = (AtkTextNode*) nodeList[3];
+        var contentData = GetContentData(listItemInfo);
+        var contentRoulette = Service.DataManager.GetExcelSheet<ContentRoulette>().GetRow(contentData.Id);
+
+        var isRouletteCompleted = InstanceContent.Instance()->IsRouletteComplete((byte) contentRoulette.RowId);
+        dutyNameTextNode->TextColor = isRouletteCompleted ? Config.CompleteColor.ToByteColor() : Config.IncompleteColor.ToByteColor();
+    }
+
+    private void ResetElement(AtkUnitBase* unitBase, AtkComponentListItemPopulator.ListItemInfo* listItemInfo, AtkResNode** nodeList) {
         var dutyNameTextNode = (AtkTextNode*) nodeList[3];
         var levelTextNode = (AtkTextNode*) nodeList[4];
-
-        if (Config.ColorContentFinder) {
-            
-            // If this is already modified
-            if (modifiedIndexes.Contains(index)) {
-                
-                // And this is not a roulette
-                if (dutyInfo is null) {
-                    TryResetEntry(index, dutyNameTextNode, levelTextNode);
-                }
-                // else it is already colored correctly
-                
-            }
-            
-            // else, this hasn't been modified, and is a roulette
-            else if (dutyInfo is { } roulette) {
-                
-                // If this roulette is being tracked, apply color
-                if (Config.TaskConfig.FirstOrDefault(task => task.RowId == roulette.RowId) is { Enabled: true }) {
-                    var isRouletteCompleted = InstanceContent.Instance()->IsRouletteComplete((byte) roulette.RowId);
-                    dutyNameTextNode->TextColor = isRouletteCompleted ? Config.CompleteColor.ToByteColor() : Config.IncompleteColor.ToByteColor();
-
-                    modifiedIndexes.Add(index);
-                }
-                // else leave it unmodified
-                
-            }
-        }
-        else {
-            TryResetEntry(index, dutyNameTextNode, levelTextNode);
-        }
         
-        if (infoTextNode is not null) {
-            infoTextNode.IsVisible = modifiedIndexes.Count is not 0;
-        }
-    
-        onDutyListPopulate!.Original(unitBase, listItemInfo, nodeList);
-    }, Service.Log);
+        dutyNameTextNode->TextColor = levelTextNode->TextColor;
+    }
 
-    private void TryResetEntry(uint index, AtkTextNode* nameNode, AtkTextNode* levelNode) {
-        if (modifiedIndexes.Contains(index)) {
-            nameNode->TextColor = levelNode->TextColor;
-            modifiedIndexes.Remove(index);
-        }
+    private static ContentsId GetContentData(AtkComponentListItemPopulator.ListItemInfo* listItemInfo) {
+        var contentId = listItemInfo->ListItem->UIntValues[1];
+        var contentEntry = AgentContentsFinder.Instance()->ContentList[contentId - 1];
+        var contentData = contentEntry.Value->Id;
+        return contentData;
     }
 
     private void AttachNodes(AddonContentsFinder* addon) {
@@ -201,7 +164,7 @@ public unsafe class DutyRoulette : BaseModules.Modules.DailyTask<DutyRouletteDat
             Y = targetResNode->GetYFloat() + 2.0f, 
             TextFlags = TextFlags.AutoAdjustNodeSize,
             AlignmentType = AlignmentType.TopLeft,
-            Text = GetHintText(),
+            SeString = GetHintText(),
             Tooltip = "Feature from DailyDuty Plugin",
             EnableEventFlags = true,
             IsVisible = false,
@@ -224,7 +187,7 @@ public unsafe class DutyRoulette : BaseModules.Modules.DailyTask<DutyRouletteDat
                 Size = new Vector2(targetComponent->Width, targetComponent->Height),
                 AlignmentType = AlignmentType.Center,
                 Tooltip = "[DailyDuty] Time until next daily reset",
-                Text = "0:00:00:00",
+                String = "0:00:00:00",
                 EnableEventFlags = true,
                 TextColor = Config.TimerColor,
             };
@@ -238,20 +201,9 @@ public unsafe class DutyRoulette : BaseModules.Modules.DailyTask<DutyRouletteDat
     }
 
     private void DetachNodes(AddonContentsFinder* addon) {
-        System.NativeController.DetachNode(infoTextNode, () => {
-            infoTextNode?.Dispose();
-            infoTextNode = null;
-        });
-        
-        System.NativeController.DetachNode(openDailyDutyButton, () => {
-            openDailyDutyButton?.Dispose();
-            openDailyDutyButton = null;
-        });
-        
-        System.NativeController.DetachNode(dailyResetTimer, () => {
-            dailyResetTimer?.Dispose();
-            dailyResetTimer = null;
-        });
+        System.NativeController.DisposeNode(ref infoTextNode);
+        System.NativeController.DisposeNode(ref openDailyDutyButton);
+        System.NativeController.DisposeNode(ref dailyResetTimer);
     }
 
     private void OnContentFinderUpdate(AddonContentsFinder* addon) {
@@ -263,12 +215,16 @@ public unsafe class DutyRoulette : BaseModules.Modules.DailyTask<DutyRouletteDat
             var nextReset = Time.NextDailyReset();
             var timeRemaining = nextReset - DateTime.UtcNow;
         
-            dailyResetTimer.Text = timeRemaining.FormatTimeSpanShort(System.TimersConfig.HideTimerSeconds);
+            dailyResetTimer.String = timeRemaining.FormatTimeSpanShort(System.TimersConfig.HideTimerSeconds);
             dailyResetTimer.TextColor = Config.TimerColor;
         }
         
         if (dailyResetTimer is not null) {
             dailyResetTimer.IsVisible = Config.ShowResetTimer && addon->SelectedRadioButton == 0;
+        }
+                
+        if (infoTextNode is not null) {
+            infoTextNode.IsVisible = rouletteListController.ModifiedIndexes.Count is not 0 && addon->SelectedRadioButton is 0;
         }
     }
 
@@ -284,11 +240,11 @@ public unsafe class DutyRoulette : BaseModules.Modules.DailyTask<DutyRouletteDat
             .PushColorRgba(Config.CompleteColor)
             .Append("Complete Task")
             .PopColor()
-            .ToSeString()
+            .ToReadOnlySeString()
             .ToDalamudString();
 
     protected override void UpdateTaskLists() {
-        var luminaUpdater = new LuminaTaskUpdater<ContentRoulette>(this, roulette => roulette.DutyType.ExtractText() != string.Empty);
+        var luminaUpdater = new LuminaTaskUpdater<ContentRoulette>(this, roulette => roulette.DutyType.ToString() != string.Empty);
         luminaUpdater.UpdateConfig(Config.TaskConfig);
         luminaUpdater.UpdateData(Data.TaskData);
     }

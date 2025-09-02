@@ -2,11 +2,11 @@
 using System.Text.Json.Serialization;
 using DailyDuty.CustomNodes;
 using DailyDuty.Localization;
+using Dalamud.Bindings.ImGui;
 using Dalamud.Game.Text;
 using Dalamud.Interface;
 using Dalamud.Interface.Utility;
 using Dalamud.Interface.Utility.Raii;
-using ImGuiNET;
 using KamiLib.Classes;
 
 namespace DailyDuty.Modules.BaseModules;
@@ -181,10 +181,10 @@ public abstract class ModuleConfig {
         ImGui.Text("Label");
         
         ImGui.TableNextColumn();
-        var label = node.Text.ToString();
+        var label = node.String;
         ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
         if (ImGui.InputText("##Label", ref label, 100)) {
-            node.Text = label;
+            node.String = label;
         }
     }
 }

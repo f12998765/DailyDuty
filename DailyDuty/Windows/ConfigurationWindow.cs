@@ -6,11 +6,11 @@ using DailyDuty.Classes;
 using DailyDuty.CustomNodes;
 using DailyDuty.Localization;
 using DailyDuty.Modules.BaseModules;
+using Dalamud.Bindings.ImGui;
 using Dalamud.Interface;
 using Dalamud.Interface.Utility;
 using Dalamud.Interface.Utility.Raii;
 using FFXIVClientStructs.FFXIV.Component.GUI;
-using ImGuiNET;
 using KamiLib.Classes;
 using KamiLib.CommandManager;
 using KamiLib.Configuration;
@@ -27,6 +27,7 @@ public class ConfigurationWindow : TabbedSelectionWindow<Module> {
     protected override List<ITabItem> Tabs { get; } = [
         new TodoConfigTab(),
         new TimersConfigTab(),
+        new ServerInfoBarTab(),
     ];
     
     protected override List<Module> Options => System.ModuleController.Modules;
@@ -416,7 +417,7 @@ public class TodoConfigTab : ITabItem {
             if (ImGui.InputInt("##FontSize", ref fontSize)) {
                 foreach (var taskNode in node.TaskNodes.OfType<TodoTaskNode>()) {
                     taskNode.FontSize = (uint) fontSize;
-                    taskNode.Text = taskNode.Text;
+                    taskNode.String = taskNode.String;
                 }
             }
         }
@@ -626,6 +627,23 @@ public class TimersConfigTab : ITabItem {
         ImGuiTweaks.SetFullWidth();
         if (ImGui.Checkbox("##ShowTimer", ref showTimer)) {
             node.ShowTimer = showTimer;
+        }
+    }
+}
+
+public class ServerInfoBarTab : ITabItem {
+    public string Name => "Server Info Bar";
+    public bool Disabled => false;
+
+    public void Draw() {
+        ImGuiTweaks.Header("Server Info Bar Config");
+        using var indent = ImRaii.PushIndent();
+        
+        if (System.DtrController.Config is { } dtrEntry) {
+            dtrEntry.DrawConfig();
+        }
+        else {
+            ImGui.TextColored(KnownColor.OrangeRed.Vector(), "Failed to load Server Info Bar Controller.");
         }
     }
 }

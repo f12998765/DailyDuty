@@ -1,5 +1,5 @@
 using DailyDuty.Classes;
-using DailyDuty.Models;
+using DailyDuty.Configs;
 using DailyDuty.Windows;
 using FFXIVClientStructs.FFXIV.Client.UI;
 using KamiLib.Classes;
@@ -26,4 +26,5 @@ public static class System {
 	public static TimersConfig TimersConfig { get; set; }
 	public static AddonController<AddonContentsFinder> ContentsFinderController { get; set; }
 	public static OverlayController OverlayController { get; set; }
+	public static DtrController DtrController { get; set; }
 }
