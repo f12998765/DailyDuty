@@ -1,0 +1,59 @@
+name: Build and Package DailyDuty
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    permissions:
+      contents: write
+
+    steps:
+    - name: Checkout Repository with Submodules
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    - name: Setup .NET SDK
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '9.0.x'
+
+    - name: Download and Prepare Mock Dalamud Dev Environment
+      shell: pwsh
+      run: |
+        $installPath = "C:\Users\runneradmin\AppData\Roaming\XIVLauncher\addon\Hooks\dev"
+        
+        # 创建 Dalamud 期望的硬编码路径
+        mkdir -p $installPath
+        
+        # 下载 Dalamud SDK
+        Invoke-WebRequest -Uri https://github.com/goatcorp/dalamud-distrib/archive/60542b86dee2884b0f8904c6b2ff84c044e2a444.zip -OutFile latest.zip
+        
+        # 解压 SDK 到正确的路径
+        Expand-Archive -Force latest.zip $installPath
+        
+    - name: Restore Dependencies
+      run: dotnet restore DailyDuty.sln
+
+    - name: Build and Publish Projects
+      run: |
+        dotnet publish KamiLib/KamiLib.csproj -c Release -o KamiLib/bin/Release/
+        dotnet publish KamiToolKit/KamiToolKit.csproj -c Release -o KamiToolKit/bin/Release/
+        dotnet publish DailyDuty/DailyDuty.csproj -c Release -o DailyDuty/bin/Release/
+
+    - name: Create Zip Artifact
+      shell: pwsh
+      run: |
+        Compress-Archive -Path DailyDuty/bin/Release/* -DestinationPath DailyDuty.zip
+
+    - name: Upload Zip Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: DailyDuty
+        path: DailyDuty.zip
