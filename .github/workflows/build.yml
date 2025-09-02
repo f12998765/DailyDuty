@@ -33,7 +33,7 @@ jobs:
         mkdir -p $installPath
         
         # 下载 Dalamud SDK
-        Invoke-WebRequest -Uri https://github.com/goatcorp/dalamud-distrib/archive/60542b86dee2884b0f8904c6b2ff84c044e2a444.zip -OutFile latest.zip
+        Invoke-WebRequest -Uri https://goatcorp.github.io/dalamud-distrib/latest.zip -OutFile latest.zip
         
         # 解压 SDK 到正确的路径
         Expand-Archive -Force latest.zip $installPath
